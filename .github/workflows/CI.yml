@@ -50,7 +50,7 @@ jobs:
           node-version: 24
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 9.15.0
       - name: Install
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -124,7 +124,7 @@ jobs:
           architecture: ${{ matrix.settings.architecture }}
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 9.15.0
       - name: Install dependencies
         run: pnpm install
       - name: Download artifacts
@@ -158,7 +158,7 @@ jobs:
           node-version: ${{ matrix.node }}
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 9.15.0
       - name: Output docker params
         id: docker
         run: |
@@ -222,7 +222,7 @@ jobs:
           node-version: 24
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 9.15.0
       - name: Install dependencies
         run: pnpm install
       - name: create npm dirs
