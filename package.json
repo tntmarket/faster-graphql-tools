@@ -68,5 +68,5 @@
       "@oxc-node/core/register"
     ]
   },
-  "packageManager": "yarn@4.12.0"
+  "packageManager": "pnpm@9.15.0"
 }
