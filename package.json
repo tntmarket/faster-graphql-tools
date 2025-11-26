@@ -1,5 +1,5 @@
 {
-  "name": "faster-graphql-tools",
+  "name": "@tntmarket/faster-graphql-tools",
   "version": "1.0.0",
   "description": "Helpers for parsing GraphQL Queries",
   "main": "index.js",
