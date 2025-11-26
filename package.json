@@ -5,22 +5,17 @@
   "main": "index.js",
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/napi-rs/package-template.git"
+    "url": "https://github.com/tntmarket/faster-graphql-tools.git"
   },
   "license": "MIT",
-  "browser": "browser.js",
   "keywords": [
-    "napi-rs",
+    "graphql",
     "NAPI",
-    "N-API",
-    "Rust",
-    "node-addon",
-    "node-addon-api"
+    "Rust"
   ],
   "files": [
     "index.d.ts",
-    "index.js",
-    "browser.js"
+    "index.js"
   ],
   "napi": {
     "binaryName": "faster-graphql-tools",
