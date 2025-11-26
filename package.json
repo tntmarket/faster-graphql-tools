@@ -1,7 +1,7 @@
 {
   "name": "faster-graphql-tools",
   "version": "1.0.0",
-  "description": "Template project for writing node package with napi-rs",
+  "description": "Helpers for parsing GraphQL Queries",
   "main": "index.js",
   "repository": {
     "type": "git",
