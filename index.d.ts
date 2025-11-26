@@ -6,4 +6,6 @@ export declare class ParsedSchema {
   constructor(schemaText: string)
   /** Extract schema coordinates from a document using this parsed schema */
   extractSchemaCoordinates(documentText: string): Array<string>
+  /** Check if a field exists on a type */
+  hasField(coordinate: string): boolean
 }

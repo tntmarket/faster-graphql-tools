@@ -57,6 +57,37 @@ impl ParsedSchema {
 
         Ok(result)
     }
+
+    /// Check if a field exists on a type
+    #[napi]
+    pub fn has_field(&self, coordinate: String) -> Result<bool> {
+        // Parse the coordinate in the format "TypeName.fieldName"
+        let parts: Vec<&str> = coordinate.split('.').collect();
+
+        if parts.len() != 2 {
+            return Err(Error::from_reason(
+                "Invalid coordinate format. Expected 'TypeName.fieldName'".to_string(),
+            ));
+        }
+
+        let type_name = parts[0];
+        let field_name = parts[1];
+
+        if type_name.is_empty() || field_name.is_empty() {
+            return Err(Error::from_reason(
+                "Invalid coordinate format. Type name and field name cannot be empty".to_string(),
+            ));
+        }
+
+        // Look up the type in the type map
+        if let Some(type_info) = self.type_map.get(type_name) {
+            // Check if the field exists on this type
+            Ok(type_info.fields.contains_key(field_name))
+        } else {
+            // Type doesn't exist
+            Ok(false)
+        }
+    }
 }
 
 fn build_type_map(schema_doc: &schema::Document<'_, String>) -> HashMap<String, TypeInfo> {
@@ -346,20 +377,27 @@ struct TypeInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::LazyLock;
 
     const PETS_SCHEMA: &str = include_str!("../testing/pets.schema.graphql");
 
-    fn extract_and_sort(document: &str, schema: &str) -> Vec<String> {
-        let parsed_schema = ParsedSchema::new(schema.to_string()).expect("Should parse schema");
-        let mut result = parsed_schema
-            .extract_schema_coordinates(document.to_string())
-            .expect("Should extract schema coordinates");
-        result.sort();
-        result
-    }
+    static PARSED_SCHEMA: LazyLock<ParsedSchema> = LazyLock::new(|| {
+        ParsedSchema::new(PETS_SCHEMA.to_string()).expect("Should parse schema")
+    });
 
-    #[test]
-    fn test_basic_query() {
+    mod extract_schema_coordinates_tests {
+        use super::*;
+
+        fn extract_and_sort(document: &str) -> Vec<String> {
+            let mut result = PARSED_SCHEMA
+                .extract_schema_coordinates(document.to_string())
+                .expect("Should extract schema coordinates");
+            result.sort();
+            result
+        }
+
+        #[test]
+        fn test_basic_query() {
         let document = r#"
             {
                 animalOwner {
@@ -371,7 +409,7 @@ mod tests {
             }
         "#;
 
-        let result = extract_and_sort(document, PETS_SCHEMA);
+        let result = extract_and_sort(document);
         assert_eq!(
             result,
             vec![
@@ -394,7 +432,7 @@ mod tests {
             }
         "#;
 
-        let result = extract_and_sort(document, PETS_SCHEMA);
+        let result = extract_and_sort(document);
         assert_eq!(
             result,
             vec!["Cat.favoriteMilkBrand", "Cat.name", "Mutation.addCat"]
@@ -417,7 +455,7 @@ mod tests {
             }
         "#;
 
-        let result = extract_and_sort(document, PETS_SCHEMA);
+        let result = extract_and_sort(document);
         assert_eq!(
             result,
             vec![
@@ -448,7 +486,7 @@ mod tests {
             }
         "#;
 
-        let result = extract_and_sort(document, PETS_SCHEMA);
+        let result = extract_and_sort(document);
         assert_eq!(
             result,
             vec![
@@ -475,7 +513,7 @@ mod tests {
             }
         "#;
 
-        let result = extract_and_sort(document, PETS_SCHEMA);
+        let result = extract_and_sort(document);
         assert_eq!(
             result,
             vec![
@@ -506,7 +544,7 @@ mod tests {
             }
         "#;
 
-        let result = extract_and_sort(document, PETS_SCHEMA);
+        let result = extract_and_sort(document);
         assert_eq!(
             result,
             vec![
@@ -549,7 +587,7 @@ mod tests {
             }
         "#;
 
-        let result = extract_and_sort(document, PETS_SCHEMA);
+        let result = extract_and_sort(document);
         assert_eq!(
             result,
             vec![
@@ -584,7 +622,7 @@ mod tests {
             }
         "#;
 
-        let result = extract_and_sort(document, PETS_SCHEMA);
+        let result = extract_and_sort(document);
         assert_eq!(
             result,
             vec![
@@ -622,7 +660,7 @@ mod tests {
             }
         "#;
 
-        let result = extract_and_sort(document, PETS_SCHEMA);
+        let result = extract_and_sort(document);
         assert_eq!(
             result,
             vec![
@@ -655,7 +693,7 @@ mod tests {
             }
         "#;
 
-        let result = extract_and_sort(document, PETS_SCHEMA);
+        let result = extract_and_sort(document);
         assert_eq!(
             result,
             vec![
@@ -681,7 +719,7 @@ mod tests {
             }
         "#;
 
-        let result = extract_and_sort(document, PETS_SCHEMA);
+        let result = extract_and_sort(document);
         assert_eq!(result, vec!["Animal.name", "Root.allSpecies"]);
     }
 
@@ -700,7 +738,7 @@ mod tests {
             }
         "#;
 
-        let result = extract_and_sort(document, PETS_SCHEMA);
+        let result = extract_and_sort(document);
         assert_eq!(result, vec!["Animal.name", "Root.allSpecies", "Snake.skin"]);
     }
 
@@ -712,7 +750,7 @@ mod tests {
             }
         "#;
 
-        let result = extract_and_sort(document, PETS_SCHEMA);
+        let result = extract_and_sort(document);
         assert_eq!(result, vec!["Mutation.addVet", "VetDetailsInput"]);
     }
 
@@ -726,20 +764,124 @@ mod tests {
             }
         "#;
 
-        let result = extract_and_sort(document, PETS_SCHEMA);
+        let result = extract_and_sort(document);
         assert_eq!(result, vec!["Cat.name", "Mutation.addCat"]);
     }
 
-    #[test]
-    #[should_panic(expected = "Schema is not configured to execute subscription")]
-    fn test_throws_error_on_unsupported_operation_types() {
-        let document = r#"
+        #[test]
+        #[should_panic(expected = "Schema is not configured to execute subscription")]
+        fn test_throws_error_on_unsupported_operation_types() {
+            let document = r#"
             subscription Foo {
                 bar
             }
         "#;
 
-        let _ = extract_and_sort(document, PETS_SCHEMA);
+            let _ = extract_and_sort(document);
+        }
+    }
+
+    mod has_field_tests {
+        use super::*;
+
+        #[test]
+        fn test_has_field_with_valid_field() {
+            assert!(PARSED_SCHEMA.has_field("Cat.name".to_string()).unwrap());
+            assert!(PARSED_SCHEMA
+                .has_field("Cat.favoriteMilkBrand".to_string())
+                .unwrap());
+            assert!(PARSED_SCHEMA.has_field("Dog.breed".to_string()).unwrap());
+            assert!(PARSED_SCHEMA.has_field("Human.name".to_string()).unwrap());
+            assert!(PARSED_SCHEMA
+                .has_field("Human.contactDetails".to_string())
+                .unwrap());
+        }
+
+        #[test]
+        fn test_has_field_with_invalid_field() {
+            assert!(!PARSED_SCHEMA
+                .has_field("Cat.nonExistentField".to_string())
+                .unwrap());
+            assert!(!PARSED_SCHEMA.has_field("Dog.wings".to_string()).unwrap());
+            assert!(!PARSED_SCHEMA.has_field("Human.hairColor".to_string()).unwrap());
+        }
+
+        #[test]
+        fn test_has_field_with_invalid_type() {
+            assert!(!PARSED_SCHEMA
+                .has_field("NonExistentType.field".to_string())
+                .unwrap());
+            assert!(!PARSED_SCHEMA.has_field("Snake.name".to_string()).unwrap());
+        }
+
+        #[test]
+        fn test_has_field_with_root_type() {
+            // Test using the schema's actual root type name
+            assert!(PARSED_SCHEMA
+                .has_field("Root.animalOwner".to_string())
+                .unwrap());
+            assert!(PARSED_SCHEMA.has_field("Root.pets".to_string()).unwrap());
+            assert!(PARSED_SCHEMA.has_field("Root.allSpecies".to_string()).unwrap());
+
+            // Test using the standard Query name (if aliased)
+            assert!(PARSED_SCHEMA
+                .has_field("Query.animalOwner".to_string())
+                .unwrap());
+        }
+
+        #[test]
+        fn test_has_field_with_mutation() {
+            assert!(PARSED_SCHEMA
+                .has_field("Mutation.addCat".to_string())
+                .unwrap());
+            assert!(PARSED_SCHEMA
+                .has_field("Mutation.addVet".to_string())
+                .unwrap());
+            assert!(!PARSED_SCHEMA
+                .has_field("Mutation.nonExistentMutation".to_string())
+                .unwrap());
+        }
+
+        #[test]
+        fn test_has_field_with_interface() {
+            // Animal is an interface in the pets schema
+            assert!(PARSED_SCHEMA.has_field("Animal.name".to_string()).unwrap());
+        }
+
+        #[test]
+        fn test_has_field_with_extended_types() {
+            // ContactDetails has an extended field 'address'
+            assert!(PARSED_SCHEMA
+                .has_field("ContactDetails.email".to_string())
+                .unwrap());
+            assert!(PARSED_SCHEMA
+                .has_field("ContactDetails.address".to_string())
+                .unwrap());
+            assert!(PARSED_SCHEMA.has_field("Address.zip".to_string()).unwrap());
+        }
+
+        #[test]
+        fn test_has_field_with_invalid_format() {
+            // Test with invalid format (no dot separator)
+            let result = PARSED_SCHEMA.has_field("InvalidFormat".to_string());
+            assert!(result.is_err());
+
+            // Test with empty string
+            let result = PARSED_SCHEMA.has_field("".to_string());
+            assert!(result.is_err());
+
+            // Test with too many dots
+            let result = PARSED_SCHEMA.has_field("Cat.name.extra".to_string());
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn test_has_field_case_sensitivity() {
+            // GraphQL is case-sensitive
+            assert!(PARSED_SCHEMA.has_field("Cat.name".to_string()).unwrap());
+            assert!(!PARSED_SCHEMA.has_field("cat.name".to_string()).unwrap());
+            assert!(!PARSED_SCHEMA.has_field("Cat.Name".to_string()).unwrap());
+        }
     }
 }
 
