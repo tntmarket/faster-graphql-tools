@@ -35,6 +35,7 @@
   },
   "scripts": {
     "artifacts": "napi artifacts",
+    "bench": "node --import @oxc-node/core/register benchmark/bench.ts",
     "build": "napi build --platform --release",
     "build:debug": "napi build --platform",
     "prepublishOnly": "napi prepublish -t npm",
@@ -47,6 +48,7 @@
     "@oxc-node/core": "^0.0.34",
     "@types/node": "^24.10.1",
     "ava": "^6.4.1",
+    "tinybench": "^5.1.0",
     "typescript": "^5.9.2"
   },
   "ava": {

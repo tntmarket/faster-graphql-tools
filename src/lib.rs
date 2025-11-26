@@ -5,7 +5,6 @@ use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::time::Instant;
 
 /// A parsed GraphQL schema that can be reused to extract coordinates from multiple documents
 #[napi]
@@ -18,8 +17,6 @@ impl ParsedSchema {
     /// Create a new ParsedSchema from a schema string
     #[napi(constructor)]
     pub fn new(schema_text: String) -> Result<Self> {
-        let parse_start = Instant::now();
-
         // Parse the schema
         let schema_doc = schema::parse_schema::<String>(&schema_text)
             .map_err(|e| Error::from_reason(format!("Failed to parse schema: {}", e)))?;
@@ -27,29 +24,19 @@ impl ParsedSchema {
         // Build type map and wrap in Arc
         let type_map = Arc::new(build_type_map(&schema_doc));
 
-        let parse_time = parse_start.elapsed();
-        eprintln!(
-            "SCHEMA: Parsed schema in {:.3}ms",
-            parse_time.as_secs_f64() * 1000.0
-        );
-
         Ok(ParsedSchema { type_map })
     }
 
     /// Extract schema coordinates from a document using this parsed schema
     #[napi]
     pub fn extract_schema_coordinates(&self, document_text: String) -> Result<Vec<String>> {
-        let total_start = Instant::now();
         let mut coordinates = HashSet::new();
 
         // Parse the document
-        let doc_parse_start = Instant::now();
         let query_doc = query::parse_query::<String>(&document_text)
             .map_err(|e| Error::from_reason(format!("Failed to parse document: {}", e)))?;
-        let doc_parse_time = doc_parse_start.elapsed();
 
         // Extract coordinates from the document
-        let extract_start = Instant::now();
         for definition in &query_doc.definitions {
             match definition {
                 query::Definition::Operation(operation) => {
@@ -66,18 +53,8 @@ impl ParsedSchema {
                 }
             }
         }
-        let extract_time = extract_start.elapsed();
 
         let result: Vec<String> = coordinates.into_iter().collect();
-        let total_time = total_start.elapsed();
-
-        // Print timing information to stderr so it doesn't interfere with JSON output
-        eprintln!(
-            "TIMING: doc_parse={:.3}ms, extract={:.3}ms, total={:.3}ms",
-            doc_parse_time.as_secs_f64() * 1000.0,
-            extract_time.as_secs_f64() * 1000.0,
-            total_time.as_secs_f64() * 1000.0
-        );
 
         Ok(result)
     }
