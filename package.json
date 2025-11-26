@@ -1,11 +1,11 @@
 {
   "name": "@tntmarket/faster-graphql-tools",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Helpers for parsing GraphQL Queries",
   "main": "index.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tntmarket/faster-graphql-tools.git"
+    "url": "git+https://github.com/tntmarket/faster-graphql-tools.git"
   },
   "license": "MIT",
   "keywords": [
