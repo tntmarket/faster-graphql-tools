@@ -49,7 +49,6 @@ impl ParsedSchema {
                 }
                 query::Definition::Fragment(_fragment) => {
                     // Fragments are processed when referenced in operations
-                    continue;
                 }
             }
         }
@@ -91,35 +90,31 @@ fn build_type_map(schema_doc: &schema::Document<'_, String>) -> HashMap<String, 
     }
 
     // Create aliases for Query and Mutation to map to the actual schema types
-    if query_type != "Query" {
-        let query_fields = type_map
-            .get(&query_type)
-            .map(|t| t.fields.clone())
-            .unwrap_or_default();
-        type_map.insert(
-            "Query".to_string(),
-            TypeInfo {
-                name: query_type.clone(),
-                fields: query_fields,
-            },
-        );
-    }
-
-    if mutation_type != "Mutation" {
-        let mutation_fields = type_map
-            .get(&mutation_type)
-            .map(|t| t.fields.clone())
-            .unwrap_or_default();
-        type_map.insert(
-            "Mutation".to_string(),
-            TypeInfo {
-                name: mutation_type.clone(),
-                fields: mutation_fields,
-            },
-        );
-    }
+    create_root_type_alias(&mut type_map, "Query", &query_type);
+    create_root_type_alias(&mut type_map, "Mutation", &mutation_type);
 
     type_map
+}
+
+/// Creates an alias for a root operation type if it differs from the standard name
+fn create_root_type_alias(
+    type_map: &mut HashMap<String, TypeInfo>,
+    standard_name: &str,
+    actual_name: &str,
+) {
+    if standard_name != actual_name {
+        let fields = type_map
+            .get(actual_name)
+            .map(|t| t.fields.clone())
+            .unwrap_or_default();
+        type_map.insert(
+            standard_name.to_string(),
+            TypeInfo {
+                name: actual_name.to_string(),
+                fields,
+            },
+        );
+    }
 }
 
 fn process_type_definition(
@@ -128,10 +123,7 @@ fn process_type_definition(
 ) {
     match type_def {
         schema::TypeDefinition::Object(obj) => {
-            let mut fields = HashMap::new();
-            for field in &obj.fields {
-                fields.insert(field.name.to_string(), get_field_type(&field.field_type));
-            }
+            let fields = extract_fields_from_definition(&obj.fields);
             type_map.insert(
                 obj.name.to_string(),
                 TypeInfo {
@@ -141,10 +133,7 @@ fn process_type_definition(
             );
         }
         schema::TypeDefinition::Interface(iface) => {
-            let mut fields = HashMap::new();
-            for field in &iface.fields {
-                fields.insert(field.name.to_string(), get_field_type(&field.field_type));
-            }
+            let fields = extract_fields_from_definition(&iface.fields);
             type_map.insert(
                 iface.name.to_string(),
                 TypeInfo {
@@ -164,6 +153,16 @@ fn process_type_definition(
         }
         _ => {}
     }
+}
+
+/// Extracts field names and their types from a list of field definitions
+fn extract_fields_from_definition(
+    fields: &[schema::Field<String>],
+) -> HashMap<String, String> {
+    fields
+        .iter()
+        .map(|field| (field.name.to_string(), get_field_type(&field.field_type)))
+        .collect()
 }
 
 fn process_type_extension(
@@ -202,6 +201,8 @@ fn extract_from_operation(
     query_doc: &query::Document<String>,
     coordinates: &mut HashSet<String>,
 ) -> Result<()> {
+    let empty_variables = Vec::new();
+
     let (root_type, selection_set, variable_defs) = match operation {
         query::OperationDefinition::Query(q) => {
             ("Query", &q.selection_set, &q.variable_definitions)
@@ -214,7 +215,7 @@ fn extract_from_operation(
                 "Schema is not configured to execute subscription",
             ));
         }
-        query::OperationDefinition::SelectionSet(ss) => ("Query", ss, &Vec::new()),
+        query::OperationDefinition::SelectionSet(ss) => ("Query", ss, &empty_variables),
     };
 
     // Extract input types from variable definitions
@@ -255,8 +256,11 @@ fn extract_input_types(
     }
 }
 
+/// Built-in GraphQL scalar types that should not be included in schema coordinates
+const BUILTIN_SCALARS: &[&str] = &["String", "Int", "Float", "Boolean", "ID"];
+
 fn is_scalar(type_name: &str) -> bool {
-    matches!(type_name, "String" | "Int" | "Float" | "Boolean" | "ID")
+    BUILTIN_SCALARS.contains(&type_name)
 }
 
 fn extract_from_selection_set(
@@ -269,35 +273,32 @@ fn extract_from_selection_set(
     for selection in selection_set {
         match selection {
             query::Selection::Field(field) => {
-                // Get the actual type name from the schema if this is an alias (like Query -> Root)
-                let actual_parent_type = type_map
+                // Resolve the canonical type name from the schema (e.g., Query -> Root for custom root types)
+                let canonical_parent_type = type_map
                     .get(parent_type)
                     .map(|info| info.name.as_str())
                     .unwrap_or(parent_type);
 
-                // Add the coordinate
-                let coordinate = format!("{}.{}", actual_parent_type, field.name);
+                // Add the coordinate using the canonical type name
+                let coordinate = format!("{}.{}", canonical_parent_type, field.name);
                 coordinates.insert(coordinate);
 
-                // Get the field type from the schema
-                let field_type = type_map
-                    .get(parent_type)
-                    .and_then(|type_info| type_info.fields.get(&field.name))
-                    .map(|s| s.as_str());
-
-                // If field has selections, traverse them
+                // If field has selections, traverse them with the field's type
                 if !field.selection_set.items.is_empty() {
-                    if let Some(field_type_name) = field_type {
-                        extract_from_selection_set(
-                            &field.selection_set.items,
-                            field_type_name,
-                            type_map,
-                            query_doc,
-                            coordinates,
-                        );
+                    // Look up the field's return type from the schema
+                    if let Some(type_info) = type_map.get(parent_type) {
+                        if let Some(field_type_name) = type_info.fields.get(&field.name) {
+                            extract_from_selection_set(
+                                &field.selection_set.items,
+                                field_type_name,
+                                type_map,
+                                query_doc,
+                                coordinates,
+                            );
+                        }
+                        // If field doesn't exist in schema, skip traversing its children
+                        // to avoid processing invalid nested selections
                     }
-                    // If field doesn't exist in schema, we don't traverse its children
-                    // This handles the case of non-existent fields with children
                 }
             }
             query::Selection::FragmentSpread(spread) => {
