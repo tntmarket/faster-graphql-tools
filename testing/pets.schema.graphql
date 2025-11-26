@@ -1,0 +1,62 @@
+schema {
+    query: Root
+    mutation: Mutation
+}
+
+type Root {
+    animalOwner: Human
+    pets: [Pet]
+    allSpecies: [Animal]
+}
+
+type Mutation {
+    addCat(name: String!): Cat!
+    addVet(details: VetDetailsInput!): Boolean!
+}
+
+input VetDetailsInput {
+    name: String!
+    address: String!
+    phone: String!
+}
+
+interface Animal {
+    name: String
+}
+
+type Dog implements Animal {
+    breed: String
+    name: String
+}
+
+type Cat implements Animal {
+    favoriteMilkBrand: String
+    name: String
+}
+
+type Parrot implements Animal {
+    name: String
+    wingSpan: Int
+}
+
+union Pet = Dog | Cat | Parrot
+
+type Human implements Animal {
+    name: String
+    age: Int
+    contactDetails: ContactDetails
+}
+
+type ContactDetails {
+    phone: String
+    email: String
+}
+
+extend type ContactDetails {
+    address: Address
+}
+
+type Address {
+    streetNumber: Int
+    zip: String
+}
