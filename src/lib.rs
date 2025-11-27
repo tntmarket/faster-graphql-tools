@@ -65,18 +65,14 @@ impl ParsedSchema {
         let parts: Vec<&str> = coordinate.split('.').collect();
 
         if parts.len() != 2 {
-            return Err(Error::from_reason(
-                "Invalid coordinate format. Expected 'TypeName.fieldName'".to_string(),
-            ));
+            return Ok(false);
         }
 
         let type_name = parts[0];
         let field_name = parts[1];
 
         if type_name.is_empty() || field_name.is_empty() {
-            return Err(Error::from_reason(
-                "Invalid coordinate format. Type name and field name cannot be empty".to_string(),
-            ));
+            return Ok(false);
         }
 
         // Look up the type in the type map
@@ -862,17 +858,9 @@ mod tests {
 
         #[test]
         fn test_has_field_with_invalid_format() {
-            // Test with invalid format (no dot separator)
-            let result = PARSED_SCHEMA.has_field("InvalidFormat".to_string());
-            assert!(result.is_err());
-
-            // Test with empty string
-            let result = PARSED_SCHEMA.has_field("".to_string());
-            assert!(result.is_err());
-
-            // Test with too many dots
-            let result = PARSED_SCHEMA.has_field("Cat.name.extra".to_string());
-            assert!(result.is_err());
+            assert!(!PARSED_SCHEMA.has_field("InvalidFormat".to_string()).unwrap());
+            assert!(!PARSED_SCHEMA.has_field("".to_string()).unwrap());
+            assert!(!PARSED_SCHEMA.has_field("Cat.name.extra".to_string()).unwrap());
         }
 
         #[test]
